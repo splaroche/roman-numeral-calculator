@@ -67,6 +67,27 @@ describe RomanNumeral do
         expect(added_numeral.to_s).to eql('CMXXXI')
       end
     end
+  end
+  describe '.-' do
+    context 'given LXVIII + XII' do
+      it 'should return LVI' do
+        numeral1 = RomanNumeral.new 'LXVIII'
+        numeral2 = RomanNumeral.new 'XII'
+
+        added_numeral = numeral1 - numeral2
+        expect(added_numeral.to_s).to eql('LVI')
+      end
+    end
+
+    context 'given CXXIX + XLIII' do
+      it 'should return LXXXVI' do
+        numeral1 = RomanNumeral.new 'CXXIX'
+        numeral2 = RomanNumeral.new 'XLIII'
+
+        added_numeral = numeral1 - numeral2
+        expect(added_numeral.to_s).to eql('LXXXVI')
+      end
+    end
 
   end
 end
