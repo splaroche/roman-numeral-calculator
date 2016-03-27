@@ -68,5 +68,56 @@ describe RomanNumeral do
       end
     end
 
+    context 'given III + II' do
+      it 'should return V' do
+        numeral1 = RomanNumeral.new 'III'
+        numeral2 = RomanNumeral.new 'II'
+
+        added_numeral = numeral1 + numeral2
+        expect(added_numeral.to_s).to eql('V')
+      end
+    end
+  end
+  describe '.-' do
+    context 'given LXVIII + XII' do
+      it 'should return LVI' do
+        numeral1 = RomanNumeral.new 'LXVIII'
+        numeral2 = RomanNumeral.new 'XII'
+
+        added_numeral = numeral1 - numeral2
+        expect(added_numeral.to_s).to eql('LVI')
+      end
+    end
+
+    context 'given CXXIX + XLIII' do
+      it 'should return LXXVI' do
+        numeral1 = RomanNumeral.new 'CXXIX'
+        numeral2 = RomanNumeral.new 'XLIII'
+
+        added_numeral = numeral1 - numeral2
+        expect(added_numeral.to_s).to eql('LXXVI')
+      end
+    end
+
+    context 'given C + I' do
+      it 'should return XCIX' do
+        numeral1 = RomanNumeral.new 'C'
+        numeral2 = RomanNumeral.new 'I'
+
+        added_numeral = numeral1 - numeral2
+        expect(added_numeral.to_s).to eql('XCIX')
+      end
+    end
+
+    context 'given M + CVI' do
+      it 'should return DCCCXCIV' do
+        numeral1 = RomanNumeral.new 'M'
+        numeral2 = RomanNumeral.new 'CVI'
+
+        added_numeral = numeral1 - numeral2
+        expect(added_numeral.to_s).to eql('DCCCXCIV')
+      end
+    end
+
   end
 end

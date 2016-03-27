@@ -1,77 +1,87 @@
+require_relative 'numeral'
+
 class RomanNumeral
-  class Numeral
-    attr_accessor :numeral
-    attr_reader :count
-
-    def initialize(numeral, count=0)
-      @numeral = numeral
-      @count = count
-    end
-
-    def count=(new_count)
-      if new_count < 0
-        @count = 0
-      else
-        @count = new_count
-      end
-    end
-
-    def to_s
-      @numeral * @count
-    end
-  end
-
-  @@EXPLODED_NUMERALS = {
-      'IV' => ['I', 4],
-      'IX' => ['I', 9],
-      'XL' => ['X', 4],
-      'XC' => ['X', 9],
-      'CD' => ['C', 4],
-      'CM' => ['C', 9]
-  }
-
-  @@NEXT_NUMERALS = {
-      'I' => ['V', 5],
-      'V' => ['X', 2],
-      'X' => ['L', 5],
-      'L' => ['C', 2],
-      'C' => ['D', 5],
-      'D' => ['M', 2]
-  }
-
-  @@SOLO_SUBTITUTE_NUMERALS = {
-      'I' => 'IV',
-      'X' => 'XL',
-      'C' => 'CD'
-  }
-
-  @@DOUBLE_SUBSTITUE_NUMERALS = {
-      'IV' => 'IX',
-      'XL' => 'XC',
-      'CD' => 'CM'
-  }
+  attr_reader :numerals
 
   def initialize(roman_numeral)
-    @numerals = [
-        Numeral.new('M'),
-        Numeral.new('CM'),
-        Numeral.new('D'),
-        Numeral.new('CD'),
-        Numeral.new('C'),
-        Numeral.new('XC'),
-        Numeral.new('L'),
-        Numeral.new('XL'),
-        Numeral.new('X'),
-        Numeral.new('IX'),
-        Numeral.new('V'),
-        Numeral.new('IV'),
-        Numeral.new('I')
-    ]
+    @numerals = []
     @original_numeral = roman_numeral
     parse_numerals(roman_numeral)
   end
 
-  private def parse_numerals(numeral)
+  # Accessor
+  def numerals
+    numerals.dup
+  end
+
+
+  def combine_numerals(orig_numerals)
+    combined = []
+    counts = get_numeral_counts(orig_numerals)
+    keys = counts.keys.sort_by { |x| Numeral.ORDER_OF_PRECEDENCE.index x }
+    keys.each do |k|
+      v = counts[k]
+      next_numeral, replacement_count = k.get_next
+      if next_numeral.nil?
+        next
+      end
+
+      count, replacement_count = get_replacement_counts(v, replacement_count)
+      counts[k] = count
+      unless counts.has_key? next_numeral
+        counts[next_numeral] = 0
+      end
+      counts[next_numeral] += replacement_count
+    end
+
+    counts.each { |k, v| combined.concat [k] * v if v > 0 }
+    combined.sort!
+
+    return combined
+  end
+
+  def exploded_numerals
+    exploded = []
+    @numerals.each do |i|
+      exploded.concat i.get_exploded
+    end
+    exploded.sort!
+    return exploded
+  end
+
+  def get_numeral_breakdown(numeral, larger_numeral)
+    # We want to breakdown the larger_numeral until we have a smaller numeral
+    broken_numerals = []
+    breaking_numeral = larger_numeral
+    until broken_numerals.include?(numeral)
+      broken = breaking_numeral.get_subtractive
+      # Get the final numerals subtractives
+      next_broken = broken.last.get_subtractive
+      unless next_broken.empty?
+        broken.pop
+      end
+      broken_numerals.concat broken
+      breaking_numeral = broken.first
+    end
+    return broken_numerals
+  end
+
+  def get_numeral_counts(count_numerals)
+    counts = Hash.new(0)
+    count_numerals.each do |numeral|
+      counts[numeral] += 1
+    end
+    return counts
+  end
+
+  def get_replacement_counts(count, replacement_number)
+    replacement_count = count / replacement_number
+    remaining_count = count - (replacement_count * replacement_number)
+    return remaining_count, replacement_count
+  end
+
+  def parse_numerals(numeral)
+    numerals = []
     skip_character = false
     unprocessed_numerals = numeral.split ''
     (0..unprocessed_numerals.length - 1).each do |pos|
@@ -83,33 +93,69 @@ class RomanNumeral
       end
 
       double_numeral = unprocessed_numerals.values_at(pos, next_pos).join('')
-      if @numerals.any? { |v| v.numeral == double_numeral }
+      if Numeral.ORDER_OF_PRECEDENCE.any? { |v| v == double_numeral }
         numeral = double_numeral
         skip_character = true
       end
-      @numerals.select { |v| v.numeral == numeral }[0].count += 1
+      @numerals.push(Numeral.new numeral)
     end
+    @numerals.sort!
+  end
+
+  def remove_duplicates(first_list, counts)
+    subtracted = first_list.reject { |e| counts[e] -= 1 unless counts[e].zero? }
+    subtracted.sort!
+    return subtracted, counts
+  end
+
+  def substitute_double_numerals(orig_numerals)
+    substituted = []
+    counts = get_numeral_counts(orig_numerals)
+    keys = counts.keys.sort_by { |x| Numeral.ORDER_OF_PRECEDENCE.index x }
+    keys.each do |k|
+      v = counts[k]
+      double_substitute = k.double_substitution
+      unless double_substitute.nil?
+        second_numeral = k.get_second_substitute_part
+        second_count = counts[second_numeral]
+        unless second_numeral.nil? and second_count.nil?
+          number_to_substitute = [v, second_count].min
+          counts[second_numeral] -= number_to_substitute
+          counts[k] -= number_to_substitute
+          unless counts.has_key? double_substitute
+            counts[double_substitute] = 0
+          end
+          counts[double_substitute] += number_to_substitute
+        end
+      end
+    end
+    counts.each { |k, v| substituted.concat [k] * v if v > 0 }
+    substituted.sort!
+
+    return substituted
   end
 
 
-  def exploded_numerals
-    numerals = self.numerals
-    numerals.each do |v|
-      if v.count == 0
-        next
-      end
-      exploded_numeral = @@EXPLODED_NUMERALS[v.numeral]
-      unless exploded_numeral.nil?
-        number_to_explode = v.count * exploded_numeral[1]
-        v.count -= number_to_explode / exploded_numeral[1]
-        numerals.select { |n| n.numeral == exploded_numeral[0] }[0].count += number_to_explode
+  def substitute_solo_numerals(orig_numerals)
+    substituted = []
+    counts = get_numeral_counts(orig_numerals)
+    keys = counts.keys.sort_by { |x| Numeral.ORDER_OF_PRECEDENCE.index x }
+    keys.each do |k|
+      v = counts[k]
+      unless k.solo_substitution.nil?
+        count, replacement_count = get_replacement_counts(v, 4)
+        counts[k] = count
+        unless counts.has_key? k.solo_substitution
+          counts[k.solo_substitution] = 0
+        end
+        counts[k.solo_substitution] += replacement_count
       end
     end
-    return numerals
-  end
 
-  def numerals
-    Marshal.load(Marshal.dump(@numerals))
+    counts.each { |k, v| substituted.concat [k] * v if v > 0 }
+    substituted.sort!
+
+    return substituted
   end
 
   def +(other)
@@ -119,60 +165,68 @@ class RomanNumeral
 
     # 2. catenate the values
     catenated = self_numerals
-    other_numerals.each do |v|
-      if v.count == 0
-        next
-      end
-      catenated.select { |n| n.numeral == v.numeral }[0].count += v.count
-    end
+    catenated.concat(other_numerals)
+    # 3. sort the symbols largest => right
+    catenated.sort!
 
-    # 3. sort the symbols largest <= left
-    # sorted_numerals = order_numerals(catenated)
     # 4. start at right end and combine any of the same symbols
     #    that can be combined into a larger one
-    catenated.reverse_each do |v|
-      if v.count == 0
-        next
-      end
-      next_numeral = @@NEXT_NUMERALS[v.numeral]
-      unless next_numeral.nil?
-        number_to_replace = v.count / next_numeral[1]
-        v.count -= number_to_replace * next_numeral[1]
-        catenated.select { |n| n.numeral == next_numeral[0] }[0].count += number_to_replace
-      end
-    end
+    combined = combine_numerals(catenated)
 
     # 5. substitute any subtractives
-    catenated.reverse_each do |v|
-      if v.count == 0
-        next
-      end
+    substituted = substitute_solo_numerals(combined)
+    substituted = substitute_double_numerals(substituted)
 
-      # Solo substitutes are always a combination of 4.
-      substitute = @@SOLO_SUBTITUTE_NUMERALS[v.numeral]
-      unless substitute.nil?
-        number_to_substitute = v.count / 4
-        v.count -= number_to_substitute * 4
-        catenated.select{ |n| n.numeral == substitute }[0].count += number_to_substitute
-      end
+    return RomanNumeral.new substituted.reverse.join
+  end
 
-      # Double substitutions combine two numerals.  Because we're reversing through the sorted array,
-      # we'll hit the initial double substitution numeral first.  The second character will be the second numeral to
-      # combine with.
-      double_substitute = @@DOUBLE_SUBSTITUE_NUMERALS[v.numeral]
-      unless double_substitute.nil?
-        second_numeral = catenated.select{ |n| n.numeral == v.numeral[1] }[0]
-        number_to_substitute = [v.count, second_numeral.count].max
-        second_numeral.count -= number_to_substitute
-        v.count -= number_to_substitute
-        catenated.select{ |n| n.numeral == double_substitute }[0].count += number_to_substitute
+  def -(other)
+    # 1. Substitute for any subtractives in both values.
+    self_numerals = self.exploded_numerals
+    other_numerals = other.exploded_numerals
+
+
+    # 2. Any symbols occurring in the second value are "crossed out" in the first.
+    #     If the symbol appears in the first, simply cross it out.
+    #     If not, then convert a "larger" symbol into appropriate multiples of the needed one, then cross out.
+    # first pass
+    counts = other_numerals.inject(Hash.new(0)) { |h, v| h[v] += 1; h }
+    combined, counts = remove_duplicates(self_numerals, counts)
+
+    remaining_other = counts.select { |k, v| v > 0 }
+    until remaining_other.empty?
+      keys = remaining_other.keys.sort_by { |x| Numeral.ORDER_OF_PRECEDENCE.index x }
+      keys.each do |k|
+        # find the first numeral that is larger than the current key
+        unless combined.include? k
+          next_largest = combined.select { |x| x > k }.first
+          combined.delete(next_largest)
+          combined.concat get_numeral_breakdown(k, next_largest)
+          combined.sort!
+        end
       end
+      combined, counts = remove_duplicates(combined, counts)
+      remaining_other = counts.select { |k, v| v > 0 }
     end
 
-    return RomanNumeral.new catenated.select { |x| x.count >= 1 }.join
+    # 3. Rewrite without the crossed out symbols.
+    # Done
+
+    # 4. Check for any groupings of the same symbol that needs to be replaced with a "larger" one.
+    combined = combine_numerals(combined)
+    # 5. Compact the result by substituting subtractives where possible.
+    substituted = substitute_solo_numerals(combined)
+    substituted = substitute_double_numerals(substituted)
+
+    return RomanNumeral.new substituted.reverse.join
   end
 
   def to_s
-    return @numerals.select { |x| x.count > 0 }.join
+    # Order of writing is always largest -> smallest
+    @numerals.reverse.join
   end
+
+  private :combine_numerals, :get_numeral_breakdown, :get_numeral_counts, :get_replacement_counts, :parse_numerals,
+          :substitute_solo_numerals, :substitute_double_numerals
+
 end
